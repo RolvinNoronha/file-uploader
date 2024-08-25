@@ -4,7 +4,6 @@ import com.rolvin.fileupload.file.dto.UploadDeleteFileResponse;
 import com.rolvin.fileupload.file.dto.AllFilesResponse;
 import com.rolvin.fileupload.file.service.FileService;
 import lombok.RequiredArgsConstructor;
-import org.springframework.core.io.ByteArrayResource;
 import org.springframework.core.io.Resource;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;

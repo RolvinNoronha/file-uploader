@@ -1,6 +1,9 @@
 package com.rolvin.fileupload.auth;
 
 import com.rolvin.fileupload.config.JwtService;
+import com.rolvin.fileupload.token.Token;
+import com.rolvin.fileupload.token.TokenRepository;
+import com.rolvin.fileupload.token.TokenType;
 import com.rolvin.fileupload.user.Role;
 import com.rolvin.fileupload.user.User;
 import com.rolvin.fileupload.user.UserRepository;
@@ -11,6 +14,8 @@ import org.springframework.security.core.Authentication;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 
+import java.util.List;
+
 @Service
 @RequiredArgsConstructor
 public class AuthService {
@@ -19,6 +24,7 @@ public class AuthService {
     private final UserRepository userRepository;
     private final JwtService jwtService;
     private final AuthenticationManager authenticationManager;
+    private final TokenRepository tokenRepository;
 
     public AuthResponse register(RegisterRequest request)
     {
@@ -30,8 +36,10 @@ public class AuthService {
                 .role(Role.USER)
                 .build();
 
-        userRepository.save(user);
-        var jwtToken = jwtService.generateToken(user);
+        User savedUser = userRepository.save(user);
+        String jwtToken = jwtService.generateToken(user);
+
+        saveUserToken(savedUser, jwtToken);
 
         return AuthResponse.builder().token(jwtToken).build();
     }
@@ -42,7 +50,7 @@ public class AuthService {
             return null;
         }
 
-        var user = userRepository.findByEmail(request.getEmail()).orElse(null);
+        User user = userRepository.findByEmail(request.getEmail()).orElse(null);
         if (user == null) {
             return null;
         }
@@ -58,7 +66,39 @@ public class AuthService {
             return AuthResponse.builder().token("").build();
         }
 
-        var jwtToken = jwtService.generateToken(user);
+        String jwtToken = jwtService.generateToken(user);
+
+        revokeAllUserTokens(user);
+        saveUserToken(user, jwtToken);
+
         return AuthResponse.builder().token(jwtToken).build();
+    }
+
+    private void revokeAllUserTokens(User user)
+    {
+        List<Token> validUserTokens = tokenRepository.findAllValidTokensOfUser(user.getId());
+        if (validUserTokens.isEmpty())
+        {
+            return;
+        }
+
+        validUserTokens.forEach(token -> {
+            token.setExpired(true);
+            token.setRevoked(true);
+        });
+
+        tokenRepository.saveAll(validUserTokens);
+    }
+
+    private void saveUserToken(User savedUser, String jwtToken) {
+        Token token = Token.builder()
+                .user(savedUser)
+                .token(jwtToken)
+                .tokenType(TokenType.BEARER)
+                .expired(false)
+                .revoked(false)
+                .build();
+
+        tokenRepository.save(token);
     }
 }

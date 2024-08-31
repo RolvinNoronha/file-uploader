@@ -1,5 +1,6 @@
 package com.rolvin.fileupload.config;
 
+import com.rolvin.fileupload.token.TokenRepository;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
@@ -22,6 +23,7 @@ public class JwtAuthFilter extends OncePerRequestFilter
 {
     private final JwtService jwtService;
     private final UserDetailsService userDetailsService;
+    private final TokenRepository tokenRepository;
 
     @Override
     protected void doFilterInternal(
@@ -46,9 +48,11 @@ public class JwtAuthFilter extends OncePerRequestFilter
         {
             try
             {
-
                 UserDetails userDetails = this.userDetailsService.loadUserByUsername(userEmail);
-                if (jwtService.isValidToken(jwt, userDetails))
+                boolean isTokenValid = tokenRepository.findByToken(jwt)
+                        .map(t -> !t.isExpired() && !t.isRevoked())
+                        .orElse(false);
+                if (isTokenValid && jwtService.isValidToken(jwt, userDetails))
                 {
                     UsernamePasswordAuthenticationToken authenticationToken =
                             new UsernamePasswordAuthenticationToken(userDetails, null, userDetails.getAuthorities());
@@ -60,11 +64,13 @@ public class JwtAuthFilter extends OncePerRequestFilter
                 else
                 {
                     response.sendError(HttpServletResponse.SC_UNAUTHORIZED, "token expired login again");
+                    return;
                 }
             }
             catch (UsernameNotFoundException e)
             {
                 response.sendError(HttpServletResponse.SC_NOT_FOUND, "no user with the username found");
+                return;
             }
         }
 
